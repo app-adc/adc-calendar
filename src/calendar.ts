@@ -1,10 +1,6 @@
-import { addMonth } from 'adc-directive'
 import { DateValidationError } from './composition-calendar'
 import Main from './main'
-import { StateElement, Style } from './type-calendar'
-type Box = StateElement & {
-    children: StateElement[]
-}
+import { Box, StateElement, Style } from './type-calendar'
 
 export type CalendarState = {
     lang?: 'thai' | 'en' | 'th' | 'english'
@@ -19,26 +15,25 @@ export type CalendarState = {
 
 export class swCalendar extends Main {
     /*------------------------------Set---------------------------------*/
-    private category = 'DAY' // type day
 
     /*-------------x----------------Set-----------------x---------------*/
-
-    private lang: 'thai' | 'en' | 'th' | 'english' = 'en'
-    private nextDate?: ((arg: Date) => void) | undefined
-    private nextMonth?: ((arg: Date) => void) | undefined
-    private year: 'en' | 'th' = 'th'
     private value: Date = new Date()
-    private min: Date = new Date()
-    private max: Date = new Date('2200-01-01')
 
-    private ui_value: Date = new Date()
-    private style?: Style = {}
+    protected nextDate?: (arg: Date) => void
 
     constructor(id: string, config: CalendarState) {
-        super(id)
+        super(id, 'DAY')
         this.validateConfig(config)
         this.initializeState(config)
-        this.setupAccessibility()
+
+        // Remove direct DOM manipulation from constructor
+        if (this.isClient()) {
+            // Defer DOM operations to next tick
+            setTimeout(() => {
+                this.setupAccessibility()
+                this.mount()
+            }, 0)
+        }
     }
 
     /**
@@ -56,12 +51,8 @@ export class swCalendar extends Main {
         this.year = config.year === 'th' ? 'th' : 'en'
 
         // กำหนด callbacks
-        if (typeof config.nextDate === 'function') {
-            this.nextDate = config.nextDate
-        }
-        if (typeof config.nextMonth === 'function') {
-            this.nextMonth = config.nextMonth
-        }
+        this.nextDate = config.nextDate
+        this.nextMonth = config.nextMonth
 
         this.setDateOfMinMax(config)
 
@@ -88,41 +79,11 @@ export class swCalendar extends Main {
     }
 
     /**
-     * ตั้งค่า ARIA attributes สำหรับการเข้าถึง
-     * @private
-     */
-    private setupAccessibility(): void {
-        const container = this.rootEl()
-        container.setAttribute('role', 'application')
-        container.setAttribute('aria-label', 'ปฏิทิน')
-    }
-
-    /**
-     * สร้างเซลล์วันที่พร้อม ARIA attributes
-     */
-    render() {
-        this.startInit()
-
-        const shadow = this.rootEl()
-        this.setStyle(shadow, this.style!)
-        const container: Box = {
-            tag: 'div',
-            props: {
-                calendar: `container`,
-            },
-            children: [],
-        }
-
-        container.children = [this.createHeader(), this.createBody()]
-        this.createBox(shadow, container)
-    }
-
-    /**
      * ล้างการเลือกวันที่
      * @public
      */
     public clear(): void {
-        this.onSetOption('SET_VALUE_AND_UI', new Date())
+        this.onSetValue(new Date())
         this.render()
     }
 
@@ -139,7 +100,7 @@ export class swCalendar extends Main {
         if (config.value) {
             this.setDateOfMinMax(config)
 
-            this.onSetOption('SET_VALUE_AND_UI', config.value)
+            this.onSetValue(config.value)
         }
         this.render()
     }
@@ -160,85 +121,7 @@ export class swCalendar extends Main {
         }
     }
 
-    private createHeader(): Box {
-        const header: Box = {
-            tag: 'div',
-            props: {
-                calendar: `header`,
-            },
-            children: [],
-        }
-        const arrow = (icon: 'LEFT' | 'RIGHT') => {
-            const res: Box = {
-                tag: 'div',
-                props: {
-                    class: 'calendar__icon-arrow',
-                },
-                methods: {
-                    click: () => this.onChangeMonth(icon),
-                },
-                children: [
-                    {
-                        tag: 'span',
-                        props: {
-                            class: `calendar--arrow ${icon.toLocaleLowerCase()}`,
-                        },
-                    },
-                ],
-            }
-
-            return res
-        }
-        const plush_year = this.year === 'th' ? 543 : 0
-        const month = this.getMonth(this.ui_value)[this.lang]
-        const year = this.ui_value.getFullYear() + plush_year
-
-        const title: StateElement = {
-            tag: 'div',
-            props: {
-                class: 'title',
-            },
-            children: `${month} ${year}`,
-        }
-
-        header.children = [arrow('LEFT'), title, arrow('RIGHT')]
-
-        return header
-    }
-    private createBody(): Box {
-        const body: Box = {
-            tag: 'div',
-            props: {
-                calendar: `body`,
-            },
-            children: [],
-        }
-
-        body.children = [this.createWeeks(), this.createDays()]
-
-        return body
-    }
-    private createWeeks(): Box {
-        const weeks: Box = {
-            tag: 'div',
-            props: {
-                calendar: `body-week`,
-            },
-            children: [],
-        }
-        let type_week: 'en' | 'th' = ['en', 'english'].includes(this.lang!)
-            ? 'en'
-            : 'th'
-
-        this.onWeeks(type_week).forEach((v) => {
-            weeks.children.push({
-                tag: 'div',
-                children: v,
-            })
-        })
-        return weeks
-    }
-    private createDays(): Box {
+    createDays(): Box {
         const days: Box = {
             tag: 'div',
             props: {
@@ -319,48 +202,17 @@ export class swCalendar extends Main {
         return days
     }
 
-    private createDate(
-        date: Date,
-        className: string,
-        isDisabled: boolean = false
-    ): StateElement {
-        const data: StateElement = {
-            tag: 'div',
-            props: {
-                class: className,
-                data_type: this.category,
-            },
-            children: date.getDate() + '',
-            methods: {
-                click: () => this.onDatePicker(date),
-            },
-        }
-
-        if (isDisabled) data.props!['calendar'] = 'disabled'
-        if (this.checkSameDate(date, this.value))
-            data.props!['class'] += ' picker_date'
-
-        return data
+    validateCheckPicker(date: Date): boolean {
+        return this.checkSameDate(date, this.value)
     }
 
-    private onDatePicker(date: Date): void {
+    onDatePicker(date: Date): void {
         // event เมื่อ กดเลือกวันที่
 
-        this.onSetOption('SET_VALUE_AND_UI', date)
+        this.onSetValue(date)
 
         if (typeof this.nextDate == 'function') {
             this.nextDate(date)
-        }
-        this.render()
-    }
-
-    private onChangeMonth(type: 'LEFT' | 'RIGHT') {
-        const uiValue = addMonth(this.ui_value, type === 'LEFT' ? -1 : 1)
-
-        this.onSetOption('SET_UI', uiValue)
-
-        if (typeof this.nextMonth == 'function') {
-            this.nextMonth(uiValue)
         }
         this.render()
     }
@@ -379,14 +231,8 @@ export class swCalendar extends Main {
             this.max = config.max
         }
     }
-    private onSetOption(type: 'SET_UI' | 'SET_VALUE_AND_UI', date: Date) {
-        //set หน้าปฏิทิน ว่าอยู่เดือนไหน หรือ set value
-        if (type === 'SET_VALUE_AND_UI') {
-            this.ui_value = date
-            this.value = date
-        } else if (type === 'SET_UI') {
-            // ตอนกดเปลี่ยนเดือน
-            this.ui_value = date
-        }
+    private onSetValue(date: Date) {
+        this.ui_value = date
+        this.value = date
     }
 }
