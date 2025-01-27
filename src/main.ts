@@ -1,6 +1,6 @@
-import { addDate } from 'adc-directive'
+import { addDate, addMonth } from 'adc-directive'
 import { css, lists } from './data-calendar'
-import { Lists, StateElement, Style } from './type-calendar'
+import { Box, Lists, StateElement, Style } from './type-calendar'
 
 let EnumStyle: Required<Style> = {
     /**
@@ -27,11 +27,47 @@ let EnumStyle: Required<Style> = {
 abstract class main {
     protected id: string
     private mounted: boolean = false
-    constructor(id: string) {
+
+    protected lang: 'thai' | 'en' | 'th' | 'english' = 'en'
+    protected year: 'en' | 'th' = 'th'
+    protected min: Date = new Date()
+    protected max: Date = new Date('2200-01-01')
+    protected ui_value: Date = new Date()
+    protected category: 'DAY' | 'BETWEEN'
+
+    protected style: Style = {}
+
+    protected nextMonth?: (arg: Date) => void
+
+    constructor(id: string, category: 'DAY' | 'BETWEEN') {
         this.id = id
+        this.category = category
     }
     // ประกาศ abstract method
-    abstract render(): void
+    abstract createDays(): Box
+    abstract onDatePicker(date: Date): void
+    abstract validateCheckPicker(date: Date): boolean
+
+    // abstract render(): void
+    render() {
+        if (!this.isClient()) return
+        const { root } = this.validateRootEl()
+
+        if (!root) return
+
+        this.startInit()
+        this.setStyle(root, this.style!)
+        const container: Box = {
+            tag: 'div',
+            props: {
+                calendar: `container`,
+            },
+            children: [],
+        }
+
+        container.children = [this.createHeader(), this.createBody()]
+        this.createBox(root, container)
+    }
 
     protected startInit() {
         if (!this.isClient()) return
@@ -64,6 +100,121 @@ abstract class main {
 
     protected isClient() {
         return typeof window !== 'undefined'
+    }
+
+    protected createWeeks(): Box {
+        const weeks: Box = {
+            tag: 'div',
+            props: {
+                calendar: `body-week`,
+            },
+            children: [],
+        }
+        let type_week: 'en' | 'th' = ['en', 'english'].includes(this.lang!)
+            ? 'en'
+            : 'th'
+
+        this.onWeeks(type_week).forEach((v) => {
+            weeks.children.push({
+                tag: 'div',
+                children: v,
+            })
+        })
+        return weeks
+    }
+
+    protected createHeader(): Box {
+        const header: Box = {
+            tag: 'div',
+            props: {
+                calendar: `header`,
+            },
+            children: [],
+        }
+        const arrow = (icon: 'LEFT' | 'RIGHT') => {
+            const res: Box = {
+                tag: 'div',
+                props: {
+                    class: 'calendar__icon-arrow',
+                },
+                methods: {
+                    click: () => this.onChangeMonth(icon),
+                },
+                children: [
+                    {
+                        tag: 'span',
+                        props: {
+                            class: `calendar--arrow ${icon.toLocaleLowerCase()}`,
+                        },
+                    },
+                ],
+            }
+
+            return res
+        }
+        const yearType = this.year === 'th' ? 543 : 0
+        const month = this.getMonth(this.ui_value)[this.lang || 'th']
+        const year = this.ui_value.getFullYear() + yearType
+        const title: StateElement = {
+            tag: 'div',
+            props: {
+                class: 'title',
+            },
+            children: `${month} ${year}`,
+        }
+
+        header.children = [arrow('LEFT'), title, arrow('RIGHT')]
+
+        return header
+    }
+
+    protected createBody(): Box {
+        const body: Box = {
+            tag: 'div',
+            props: {
+                calendar: `body`,
+            },
+            children: [],
+        }
+
+        body.children = [this.createWeeks(), this.createDays()]
+
+        return body
+    }
+
+    protected createDate(
+        date: Date,
+        className: string,
+        isDisabled: boolean = false
+    ): StateElement {
+        const data: StateElement = {
+            tag: 'div',
+            props: {
+                class: className,
+                data_type: this.category,
+            },
+            children: date.getDate() + '',
+            methods: {
+                click: () => this.onDatePicker(date),
+            },
+        }
+
+        if (isDisabled) data.props!['calendar'] = 'disabled'
+        if (this.validateCheckPicker(date))
+            data.props!['class'] += ' picker_date'
+
+        return data
+    }
+
+    protected onChangeMonth(type: 'LEFT' | 'RIGHT') {
+        const uiValue = addMonth(this.ui_value, type === 'LEFT' ? -1 : 1)
+
+        this.ui_value = uiValue
+
+        if (typeof this.nextMonth == 'function') {
+            this.nextMonth(uiValue)
+        }
+        this.render()
     }
 
     /**
@@ -181,6 +332,16 @@ abstract class main {
         const year = this.getYear(date)
 
         return year[date.getMonth()]
+    }
+
+    /**
+     * ตั้งค่า ARIA attributes สำหรับการเข้าถึง
+     */
+    protected setupAccessibility(): void {
+        const root = this.rootEl()
+        if (!root) return
+        root.setAttribute('role', 'application')
+        root.setAttribute('aria-label', 'ปฏิทิน')
     }
 
     // Add mount method

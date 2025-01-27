@@ -30,3 +30,7 @@ export type Style = {
     shadow?: string
     width?: string
 }
+
+export type Box = StateElement & {
+    children: StateElement[]
+}
