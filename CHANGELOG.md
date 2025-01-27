@@ -1,5 +1,11 @@
 # adc-calendar
 
+## 1.1.4
+
+### Patch Changes
+
+- update v. adc-directive ปรับ logic ให้เหมาะกับ ssr
+
 ## 1.1.3
 
 ### Patch Changes

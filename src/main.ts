@@ -42,6 +42,8 @@ abstract class main {
     constructor(id: string, category: 'DAY' | 'BETWEEN') {
         this.id = id
         this.category = category
+        const { root } = this.validateRootEl()
+        if (root) this.setStyle(root, this.style!)
     }
     // ประกาศ abstract method
     abstract createDays(): Box
@@ -56,7 +58,7 @@ abstract class main {
         if (!root) return
 
         this.startInit()
-        this.setStyle(root, this.style!)
+        // this.setStyle(root, this.style!)
         const container: Box = {
             tag: 'div',
             props: {

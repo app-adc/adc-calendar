@@ -79,29 +79,6 @@ export class swCalendar extends Main {
     }
 
     /**
-     * สร้างเซลล์วันที่พร้อม ARIA attributes
-     */
-    // render() {
-    //     if (!this.isClient()) return
-    //     const { root } = this.validateRootEl()
-
-    //     if (!root) return
-
-    //     this.startInit()
-    //     this.setStyle(root, this.style!)
-    //     const container: Box = {
-    //         tag: 'div',
-    //         props: {
-    //             calendar: `container`,
-    //         },
-    //         children: [],
-    //     }
-
-    //     container.children = [this.createHeader(), this.createBody()]
-    //     this.createBox(root, container)
-    // }
-
-    /**
      * ล้างการเลือกวันที่
      * @public
      */
