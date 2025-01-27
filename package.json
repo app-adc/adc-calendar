@@ -29,6 +29,6 @@
         "typescript": "^5.3.3"
     },
     "dependencies": {
-        "adc-directive": "^1.2.4"
+        "adc-directive": "^1.2.6"
     }
 }

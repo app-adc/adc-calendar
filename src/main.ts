@@ -24,25 +24,46 @@ let EnumStyle: Required<Style> = {
     width: '300px',
 }
 
-class ElementRender {
+abstract class main {
     protected id: string
+    private mounted: boolean = false
     constructor(id: string) {
         this.id = id
     }
+    // ประกาศ abstract method
+    abstract render(): void
+
     protected startInit() {
-        const check = this.rootEl().querySelector(`[calendar="container"]`)
-        if (check) {
-            check.remove()
+        if (!this.isClient()) return
+
+        const { root, rootContainer } = this.validateRootEl()
+
+        if (!root) return
+
+        if (rootContainer) {
+            rootContainer.remove()
         }
         // Create some CSS to apply to the shadow dom
         const style = document.createElement('style')
 
         style.textContent = css
 
-        const shadow = this.rootEl()
+        root.appendChild(style)
+        root.setAttribute('calendar', 'root')
+    }
 
-        shadow.appendChild(style)
-        shadow.setAttribute('calendar', 'root')
+    protected validateRootEl() {
+        if (!this.isClient()) return { root: null, rootContainer: null }
+        const root = this.rootEl()
+        return {
+            root,
+            rootContainer:
+                root?.querySelector(`[calendar="container"]`) || null,
+        }
+    }
+
+    protected isClient() {
+        return typeof window !== 'undefined'
     }
 
     /**
@@ -51,9 +72,9 @@ class ElementRender {
     stop(mileSecond: number = 200) {
         // ลบทิ้งเพ่อสร้างใหม่ หรือ การสั่งปิด calendar
         setTimeout(() => {
-            const check = this.rootEl().querySelector(`[calendar="container"]`)
-            if (check) {
-                check.remove()
+            const { rootContainer } = this.validateRootEl()
+            if (rootContainer) {
+                rootContainer.remove()
             }
         }, mileSecond)
     }
@@ -68,7 +89,8 @@ class ElementRender {
         })
     }
 
-    protected rootEl(): HTMLElement {
+    protected rootEl(): HTMLElement | null {
+        if (!this.isClient()) return null
         const root = document.querySelector(this.id) as HTMLElement
         return root
     }
@@ -160,6 +182,15 @@ class ElementRender {
 
         return year[date.getMonth()]
     }
+
+    // Add mount method
+    protected mount() {
+        if (this.mounted) return
+        this.mounted = true
+        if (this.isClient()) {
+            this.render()
+        }
+    }
 }
 
-export default ElementRender
+export default main

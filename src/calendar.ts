@@ -38,7 +38,15 @@ export class swCalendar extends Main {
         super(id)
         this.validateConfig(config)
         this.initializeState(config)
-        this.setupAccessibility()
+
+        // Remove direct DOM manipulation from constructor
+        if (this.isClient()) {
+            // Defer DOM operations to next tick
+            setTimeout(() => {
+                this.setupAccessibility()
+                this.mount()
+            }, 0)
+        }
     }
 
     /**
@@ -92,19 +100,23 @@ export class swCalendar extends Main {
      * @private
      */
     private setupAccessibility(): void {
-        const container = this.rootEl()
-        container.setAttribute('role', 'application')
-        container.setAttribute('aria-label', 'ปฏิทิน')
+        const root = this.rootEl()
+        if (!root) return
+        root.setAttribute('role', 'application')
+        root.setAttribute('aria-label', 'ปฏิทิน')
     }
 
     /**
      * สร้างเซลล์วันที่พร้อม ARIA attributes
      */
     render() {
-        this.startInit()
+        if (!this.isClient()) return
+        const { root } = this.validateRootEl()
 
-        const shadow = this.rootEl()
-        this.setStyle(shadow, this.style!)
+        if (!root) return
+
+        this.startInit()
+        this.setStyle(root, this.style!)
         const container: Box = {
             tag: 'div',
             props: {
@@ -114,7 +126,7 @@ export class swCalendar extends Main {
         }
 
         container.children = [this.createHeader(), this.createBody()]
-        this.createBox(shadow, container)
+        this.createBox(root, container)
     }
 
     /**

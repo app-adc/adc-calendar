@@ -41,14 +41,22 @@ export class swCalendarBetween extends Main {
         super(id)
         this.validateConfig(config)
         this.initializeState(config)
-        this.setupAccessibility()
+        if (this.isClient()) {
+            setTimeout(() => {
+                this.setupAccessibility()
+                this.mount()
+            }, 0)
+        }
     }
 
     render() {
-        this.startInit()
+        if (!this.isClient()) return
+        const { root } = this.validateRootEl()
 
-        const shadow = this.rootEl()
-        this.setStyle(shadow, this.style!)
+        if (!root) return
+
+        this.startInit()
+        this.setStyle(root, this.style!)
 
         const container: Box = {
             tag: 'div',
@@ -59,7 +67,7 @@ export class swCalendarBetween extends Main {
         }
 
         container.children = [this.createHeader(), this.createBody()]
-        this.createBox(shadow, container)
+        this.createBox(root, container)
     }
 
     /**
