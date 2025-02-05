@@ -42,6 +42,8 @@ abstract class main {
         this.id = id
         this.category = category
         this.initStyleAndCss()
+
+        this.setupAccessibility()
     }
     // ประกาศ abstract method
     abstract createDays(): Box
@@ -51,39 +53,6 @@ abstract class main {
      */
     abstract validateCheckPicker(date: Date): boolean
     abstract getDateValue(): Date
-
-    private handleHydration() {
-        if (this.created) return
-
-        // หลังจาก hydration เสร็จสิ้น
-        if (this.isClient()) {
-            // รอให้ DOM พร้อม
-            requestAnimationFrame(() => {
-                this.created = true
-                this.render() // re-render หลัง hydration
-            })
-        }
-    }
-
-    // สร้าง placeholder สำหรับ SSR
-    private createSSRPlaceholder() {
-        return `<div class="calendar-placeholder" data-hydrate="${this.id}">
-            <noscript>JavaScript is required</noscript>
-        </div>`
-    }
-
-    /**
-     * เรียกใช้เมื่อต้องการสร้างปฏิทินครั้งแรกผ่านการเรียกใช้งาน constructor
-     * @returns สร้างปฏิทิน
-     */
-    protected mount() {
-        if (!this.isClient()) {
-            return this.createSSRPlaceholder()
-        }
-
-        this.handleHydration()
-        // this.render()
-    }
 
     // abstract render(): void
     render() {
@@ -676,6 +645,7 @@ abstract class main {
      * ตั้งค่า ARIA attributes สำหรับการเข้าถึง
      */
     protected setupAccessibility(): void {
+        if (!this.isClient()) return
         const { root } = this.validateRootEl()
         if (!root) return
         root.setAttribute('role', 'application')

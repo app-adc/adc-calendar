@@ -25,13 +25,6 @@ export class swCalendar extends Main {
         super(id, 'DAY')
         this.validateConfig(config)
         this.initializeState(config)
-
-        // Remove direct DOM manipulation from constructor
-        if (this.isClient()) {
-            // Defer DOM operations to next tick
-            this.setupAccessibility()
-            this.mount()
-        }
     }
 
     /**

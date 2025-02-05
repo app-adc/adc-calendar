@@ -32,10 +32,6 @@ export class swCalendarBetween extends Main {
         super(id, 'BETWEEN')
         this.validateConfig(config)
         this.initializeState(config)
-        if (this.isClient()) {
-            this.setupAccessibility()
-            this.mount()
-        }
     }
 
     /**
