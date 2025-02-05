@@ -1,37 +1,36 @@
-import { addDate, addMonth } from 'adc-directive'
-import { css, lists } from './data-calendar'
-import { Box, Lists, StateElement, Style } from './type-calendar'
-
-let EnumStyle: Required<Style> = {
-    /**
-     * สีตัวอักษรวันที่กดเลือก
-     */
-    ['font-family']: `'Arial', sans-serif`,
-    /**
-     * สีตัวอักษรวันที่กดเลือก
-     */
-    ['text-picker']: '#fff', // สีตัวอักษรวันที่กดเลือก --text-picker
-    picker: '#0ea5e9', // สีวันที่กดเลือก --picker
-    dateRadius: '50%', // รัศมีวันที่กดเลือก --dateRadius
-    disabled: '#c3c2c8', // สีวันที่ถูก disabled  --disabled
-    background: '#f3f8fe', //--background
-    text: '#151426', //สีตัวอักษร
-    ['text-week']: '#1e293b', //สีตัวอักษร
-    current: '#ffdfd2', // สีวันที่ปัจจุบัน --calendar_date_current
-    border: 'none', //--border
-    borderRadius: '0.75rem', //--borderRadius
-    shadow: 'none',
-    width: '300px',
-}
+import { addDate, addMonth, dateToCombine } from 'adc-directive'
+import { renderBodyDay } from './composition-calendar'
+import { css, lists, onWeeks } from './data-calendar'
+import type { Box, Lang, Lists, StateElement, Style } from './type-calendar'
 
 abstract class main {
     protected id: string
-    private mounted: boolean = false
+    /**
+     * check สถานะของปฏิทินว่าเป็น created หรือไม่
+     */
+    public created: boolean = false
 
-    protected lang: 'thai' | 'en' | 'th' | 'english' = 'en'
-    protected year: 'en' | 'th' = 'th'
+    /**
+     * ประเภทของปฏิทิน
+     */
+    private calendarType: 'CALENDAR' | 'MONTH' | 'YEAR' = 'CALENDAR'
+    private eventListeners: Array<{
+        element: Element
+        type: string
+        handler: EventListener
+    }> = []
+
+    // จำนวนปีที่จะแสดงในเมนูปี
+    private countYear: number = 15
+
+    protected lang: Lang = 'en'
+    protected year: 'en' | 'th' = 'en'
     protected min: Date = new Date()
     protected max: Date = new Date('2200-01-01')
+
+    /**
+     * ค่าที่ใช้ในการแสดง UI
+     */
     protected ui_value: Date = new Date()
     protected category: 'DAY' | 'BETWEEN'
 
@@ -42,61 +41,131 @@ abstract class main {
     constructor(id: string, category: 'DAY' | 'BETWEEN') {
         this.id = id
         this.category = category
-        const { root } = this.validateRootEl()
-        if (root) this.setStyle(root, this.style!)
+        this.initStyleAndCss()
     }
     // ประกาศ abstract method
     abstract createDays(): Box
     abstract onDatePicker(date: Date): void
+    /**
+     * ตรวจสอบว่าวันที่ที่เลือกมีค่าตรงกับ picker หรือไม่
+     */
     abstract validateCheckPicker(date: Date): boolean
+    abstract getDateValue(): Date
+
+    private handleHydration() {
+        if (this.created) return
+
+        // หลังจาก hydration เสร็จสิ้น
+        if (this.isClient()) {
+            // รอให้ DOM พร้อม
+            requestAnimationFrame(() => {
+                this.created = true
+                this.render() // re-render หลัง hydration
+            })
+        }
+    }
+
+    // สร้าง placeholder สำหรับ SSR
+    private createSSRPlaceholder() {
+        return `<div class="calendar-placeholder" data-hydrate="${this.id}">
+            <noscript>JavaScript is required</noscript>
+        </div>`
+    }
+
+    /**
+     * เรียกใช้เมื่อต้องการสร้างปฏิทินครั้งแรกผ่านการเรียกใช้งาน constructor
+     * @returns สร้างปฏิทิน
+     */
+    protected mount() {
+        if (!this.isClient()) {
+            return this.createSSRPlaceholder()
+        }
+
+        this.handleHydration()
+        // this.render()
+    }
 
     // abstract render(): void
     render() {
         if (!this.isClient()) return
-        const { root } = this.validateRootEl()
-
-        if (!root) return
-
-        this.startInit()
-        // this.setStyle(root, this.style!)
-        const container: Box = {
-            tag: 'div',
-            props: {
-                calendar: `container`,
-            },
-            children: [],
-        }
-
-        container.children = [this.createHeader(), this.createBody()]
-        this.createBox(root, container)
-    }
-
-    protected startInit() {
-        if (!this.isClient()) return
-
         const { root, rootContainer } = this.validateRootEl()
 
         if (!root) return
 
         if (rootContainer) {
-            rootContainer.remove()
+            rootContainer.setAttribute('data-type', this.calendarType)
+            if (this.calendarType === 'CALENDAR') {
+                this.updateContentCalendar(rootContainer)
+            } else {
+                this.updateContentMenu(rootContainer)
+            }
+        } else {
+            this.createInitialContainer(root)
         }
-        // Create some CSS to apply to the shadow dom
-        const style = document.createElement('style')
+    }
+    /**
+     * update การ render ส่วนของเมนู
+     * @param container [data-box="container"]
+     */
+    private updateContentMenu(container: Element) {
+        const menu = container.querySelector('[data-box="menu-container"]')
+        if (!menu) return
+        const yearTitle = menu.querySelector('[data-box="menu-year"]')
+        const { year } = this.getConfigValue()
 
-        style.textContent = css
+        // อัพเดทส่วน header
+        if (yearTitle) {
+            yearTitle.textContent = `${year}`
+        }
+    }
 
-        root.appendChild(style)
-        root.setAttribute('calendar', 'root')
+    /**
+     * update การ render ส่วนของปฏิทิน
+     * @param container [data-box="container"]
+     */
+    private updateContentCalendar(container: Element) {
+        // เก็บข้อมูล elements ที่ต้องการอัพเดท
+        const daysContainer = container.querySelector('[data-box="body-day"]')
+        const monthTitle = container.querySelector('[data-box="month"]')
+        const yearTitle = container.querySelector('[data-box="year"]')
+
+        // อัพเดทส่วนแสดงวันที่
+        if (daysContainer) {
+            renderBodyDay(daysContainer, this.createDays())
+        }
+
+        const { month, year } = this.getConfigValue()
+
+        // อัพเดทส่วน header
+        if (yearTitle) {
+            yearTitle.textContent = `${year}`
+        }
+        if (monthTitle) {
+            monthTitle.textContent = `${month}`
+        }
+    }
+
+    private getConfigValue() {
+        // คำนวณค่าปีตามรูปแบบที่กำหนด (พ.ศ. หรือ ค.ศ.)
+        const yearType = this.year === 'th' ? 543 : 0
+        const month = this.getMonth(this.ui_value)[this.lang || 'th']
+        const year = this.ui_value.getFullYear() + yearType
+
+        return {
+            year,
+            month,
+        }
     }
 
     protected validateRootEl() {
-        if (!this.isClient()) return { root: null, rootContainer: null }
-        const root = this.rootEl()
+        const root = document.querySelector(this.id) as HTMLElement
+
+        if (!this.isClient() && !root)
+            return { root: null, rootContainer: null }
         return {
             root,
             rootContainer:
-                root?.querySelector(`[calendar="container"]`) || null,
+                root?.querySelector(`[data-box="container"]`) || null,
         }
     }
 
@@ -104,193 +173,105 @@ abstract class main {
         return typeof window !== 'undefined'
     }
 
-    protected createWeeks(): Box {
-        const weeks: Box = {
-            tag: 'div',
-            props: {
-                calendar: `body-week`,
-            },
-            children: [],
-        }
-        let type_week: 'en' | 'th' = ['en', 'english'].includes(this.lang!)
-            ? 'en'
-            : 'th'
-
-        this.onWeeks(type_week).forEach((v) => {
-            weeks.children.push({
-                tag: 'div',
-                children: v,
-            })
-        })
-        return weeks
-    }
-
-    protected createHeader(): Box {
-        const header: Box = {
-            tag: 'div',
-            props: {
-                calendar: `header`,
-            },
-            children: [],
-        }
-        const arrow = (icon: 'LEFT' | 'RIGHT') => {
-            const res: Box = {
-                tag: 'div',
-                props: {
-                    class: 'calendar__icon-arrow',
-                },
-                methods: {
-                    click: () => this.onChangeMonth(icon),
-                },
-                children: [
-                    {
-                        tag: 'span',
-                        props: {
-                            class: `calendar--arrow ${icon.toLocaleLowerCase()}`,
-                        },
-                    },
-                ],
-            }
-
-            return res
-        }
-        const yearType = this.year === 'th' ? 543 : 0
-        const month = this.getMonth(this.ui_value)[this.lang || 'th']
-        const year = this.ui_value.getFullYear() + yearType
-        const title: StateElement = {
-            tag: 'div',
-            props: {
-                class: 'title',
-            },
-            children: `${month} ${year}`,
-        }
-
-        header.children = [arrow('LEFT'), title, arrow('RIGHT')]
-
-        return header
-    }
-
-    protected createBody(): Box {
-        const body: Box = {
-            tag: 'div',
-            props: {
-                calendar: `body`,
-            },
-            children: [],
-        }
-
-        body.children = [this.createWeeks(), this.createDays()]
-
-        return body
-    }
-
     protected createDate(
         date: Date,
-        className: string,
-        isDisabled: boolean = false
+        placeholder: 'current' | 'date' | 'before' | 'after',
+        isDisabled: boolean = false,
+        className?: string
     ): StateElement {
         const data: StateElement = {
             tag: 'div',
             props: {
-                class: className,
-                data_type: this.category,
+                role: 'gridcell',
+                'aria-details': this.category, // สำหรับเช็คว่าเป็นวันที่ระหว่างหรือไม่
+                'aria-label': dateToCombine(date).valueOfDate, // ใช้เป็นค่าสำหรับ update this.ui_value
+                'aria-selected': this.validateCheckPicker(date).toString(), // สำหรับเช็คว่าเป็นวันที่ที่เลือกหรือไม่ datepicker
+                tabindex: isDisabled ? '-1' : '0', // สำหรับเช็คว่าเป็นวันที่ disabled หรือไม่
+                'aria-placeholder': placeholder,
             },
             children: date.getDate() + '',
-            methods: {
-                click: () => this.onDatePicker(date),
-            },
+        }
+        if (className) {
+            data.props!['class'] = className
         }
 
-        if (isDisabled) data.props!['calendar'] = 'disabled'
-        if (this.validateCheckPicker(date))
-            data.props!['class'] += ' picker_date'
+        // if (isDisabled) data.props!['calendar'] = 'disabled'
 
         return data
     }
 
     protected onChangeMonth(type: 'LEFT' | 'RIGHT') {
-        const uiValue = addMonth(this.ui_value, type === 'LEFT' ? -1 : 1)
-
-        this.ui_value = uiValue
-
-        if (typeof this.nextMonth == 'function') {
-            this.nextMonth(uiValue)
+        const d = this.ui_value
+        let year = d.getFullYear()
+        let month = d.getMonth() + 1
+        if (this.calendarType === 'CALENDAR') {
+            const date = new Date(`${year}-${month}-01`)
+            this.ui_value = addMonth(date, type === 'LEFT' ? -1 : 1)
+            if (typeof this.nextMonth == 'function') {
+                this.nextMonth(this.ui_value)
+            }
+        } else if (this.calendarType === 'MONTH') {
+            year += type === 'LEFT' ? -1 : 1
+            this.ui_value = new Date(`${year}-${month}-01`)
+        } else if (this.calendarType === 'YEAR') {
+            const num = type === 'LEFT' ? -16 : 16
+            this.ui_value = new Date(`${year + num}-${month}-01`)
+            this.renderUpdateYearMenu()
         }
+
         this.render()
     }
 
     /**
-     * Stops the calendar by removing it from the DOM.
+     * stop คือการทำลาย container ปฏิธินทั้งหมด
      */
-    stop(mileSecond: number = 200) {
-        // ลบทิ้งเพ่อสร้างใหม่ หรือ การสั่งปิด calendar
-        setTimeout(() => {
+    stop() {
+        if (!this.created) return
+
+        requestAnimationFrame(() => {
             const { rootContainer } = this.validateRootEl()
             if (rootContainer) {
                 rootContainer.remove()
+                this.destroyEvent()
             }
-        }, mileSecond)
-    }
 
-    // protected setStyle(shadow: HTMLElement, style: Record<string, any>) {
-    protected setStyle(shadow: HTMLElement, style: Style) {
-        const keys = Object.keys(style)
-        keys.forEach((k) => {
-            const val = `${(style! as any)[k]}`
-            if (k in style!)
-                shadow.style.setProperty(`--${k}`, val, 'important')
+            // reset state
+            this.created = false
         })
     }
 
-    protected rootEl(): HTMLElement | null {
-        if (!this.isClient()) return null
-        const root = document.querySelector(this.id) as HTMLElement
-        return root
+    /**
+     * update ค่า style และ css ให้กับ root element
+     */
+    protected initStyleAndCss() {
+        const { root } = this.validateRootEl()
+        if (!root) return
+        const style = this.style!
+        const keys = Object.keys(style)
+        keys.forEach((k) => {
+            const val = `${(style! as any)[k]}`
+            if (k in style!) root.style.setProperty(`--${k}`, val, 'important')
+        })
+
+        // สร้าง css ให้กับ root เมื่อไม่มี
+        if (root.getAttribute('calendar') === 'root') return
+        const styleCss = document.createElement('style')
+        styleCss.textContent = css
+        root.appendChild(styleCss)
+        root.setAttribute('calendar', 'root')
     }
 
-    protected createBox(box: HTMLElement, vNode: StateElement) {
-        const el = (vNode.el = document.createElement(vNode.tag))
-
-        if (vNode.props) {
-            for (const key in vNode.props) {
-                const value = vNode.props[key]
-                el.setAttribute(key, value)
-            }
-        }
-        if (vNode.children) {
-            if (typeof vNode.children === 'string') {
-                el.textContent = vNode.children
-            } else {
-                vNode.children.forEach((child) => {
-                    this.createBox(el, child)
-                })
-            }
-        }
-        if (vNode.methods) {
-            for (const key in vNode.methods) {
-                const fn = vNode.methods[
-                    key as keyof StateElement['methods']
-                ] as (...arg: any) => void
-                el.addEventListener(key, (event) => fn(event))
-            }
-        }
-
-        box.appendChild(el)
-    }
-
+    /**
+     * ตรวจสอบว่าวันที่ที่เลือกอยู่ในช่วงวันที่ระหว่างหรือไม่
+     * @param date
+     * @param min
+     * @param max
+     */
     protected onCheckDisabled(date: Date, min: Date, max: Date) {
         const dateValueOf = date.valueOf()
         const minValueOf = addDate(min, -1).valueOf()
         const maxValueOf = max.valueOf()
         return dateValueOf < minValueOf || dateValueOf > maxValueOf
-    }
-    protected onWeeks(type: 'th' | 'en'): string[] {
-        const weeks = {
-            th: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
-            en: ['Sun', 'Mon', 'Tue', 'Wen', 'Thu', 'Fri', 'Sat'],
-        }
-
-        return weeks[type]
     }
 
     protected checkSameDate(a: Date, b: Date) {
@@ -301,6 +282,10 @@ abstract class main {
         )
     }
 
+    /**
+     * get ค่าวันแรกและวันสุดท้ายของเดือน
+     * @param date วันที่ใดๆในเดือนนั้น
+     */
     protected onBeforeAfterDay(date: Date): [number, number] {
         let first_day = new Date(date.getFullYear(), date.getMonth(), 1)
         let last_day = new Date(
@@ -312,6 +297,11 @@ abstract class main {
         return [first_day.getDay(), 7 - (last_day.getDay() + 1)] // ช่องว่างก่อนเริ่มวันที่ 1,ช่องว่างหลังสิ้นเดือน
     }
 
+    /**
+     * แปลงวันที่เป็น string
+     * หาวันที่โดยเฉพาะเดือนกุมภาพันธ์
+     * @param date วันที่
+     */
     protected getYear(date: Date) {
         const _getFebDays = (year: number) => {
             let isLeapYear =
@@ -337,23 +327,448 @@ abstract class main {
     }
 
     /**
+     * จัดการเมื่อมีการคลิกที่ปุ่มเปลี่ยนเดือนหรือปีในขณะที่ this.calendarType คือ 'CALENDAR'
+     * @param container [data-box="container"]
+     */
+    private onClickMonthOrYear(container: Element, type: 'YEAR' | 'MONTH') {
+        this.calendarType = type
+        if (type === 'MONTH') {
+            const months = container.querySelector(
+                '[data-box="menu-month-container"]'
+            ) as HTMLDivElement
+            if (months) {
+                const val = String(this.ui_value.getMonth() + 1)
+                Array.from(months.children).forEach((element) => {
+                    const active = element.getAttribute('data-month') === val
+                    element.setAttribute('attr-menu-content', String(active))
+                })
+            }
+        } else if (type === 'YEAR') {
+            this.renderUpdateYearMenu()
+        }
+        this.render()
+    }
+
+    /**
+     * update render เนื้อหาของปฏิทินเมื่อมีการเปลี่ยนปี
+     * @param typeClick ประเภทการคลิก (arrow,menu year)
+     * @param year ปีที่ต้องการอัพเดท
+     */
+    private renderUpdateYearMenu() {
+        const { rootContainer } = this.validateRootEl()
+        if (!rootContainer) return
+        const years = rootContainer.querySelector(
+            '[data-box="menu-year-container"]'
+        ) as HTMLDivElement
+        if (years) {
+            const { year } = this.getConfigValue()
+            Array.from(years.children).forEach((element, i) => {
+                const val = year + i
+                const dataYear = this.year === 'en' ? val : val - 543
+                element.setAttribute('attr-menu-content', String(i === 0))
+                element.setAttribute('data-year', String(dataYear))
+                element.innerHTML = String(val)
+            })
+        }
+    }
+    //----------------------  เกิดขึ้นครั้งเดียว Create Element    --------------------------//
+
+    /**
+     * สร้าง container และ elements ที่จำเป็นสำหรับการแสดงปฏิทิน
+     * จะถูกเรียกใช้ครั้งแรกเมื่อปฏิทินถูกสร้างขึ้นเพียงครั้งเดียว
+     * @param root [calendar="root"]
+     */
+    private createInitialContainer(root: HTMLElement) {
+        if (!root) return
+        this.created = true
+        const container = document.createElement('div')
+        container.setAttribute('data-type', this.calendarType)
+        container.setAttribute('data-box', 'container')
+
+        root.appendChild(container)
+
+        this.makeHeader(container, 'calendar')
+        this.makeWeek(container)
+        this.makeDay(container)
+        this.makeMenuContainer(container)
+        this.makeInputEvent(container)
+        // ตั้งค่า event handlers
+        this.setupEventListeners()
+    }
+
+    private makeInputEvent = (container: Element) => {
+        // สร้าง input hidden สำหรับรับ focus และ keyboard events
+        const hiddenInput = document.createElement('input')
+        hiddenInput.type = 'text'
+        hiddenInput.setAttribute('aria-label', 'ควบคุมปฏิทินด้วยแป้นพิมพ์')
+        hiddenInput.setAttribute('data-box', 'hidden-input')
+        hiddenInput.style.cssText = `
+           position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+            z-index: -1 !important;
+            top: 0 !important;
+        `
+        container.appendChild(hiddenInput)
+
+        // จัดการ focus management
+        this.addEventListenerWithCleanup(container, 'click', () => {
+            hiddenInput.focus()
+        })
+
+        // จัดการ keyboard events
+        this.addEventListenerWithCleanup(hiddenInput, 'keydown', ((
+            e: Event
+        ) => {
+            const keyEvent = e as KeyboardEvent
+
+            // ป้องกันการพิมพ์และ scroll
+            keyEvent.preventDefault()
+            const d = this.ui_value
+            let year = d.getFullYear()
+            let month = d.getMonth() + 1
+            const fnForArrowUpAndDown = () => {
+                if (this.calendarType === 'YEAR') {
+                    this.onClickMonthOrYear(container, 'YEAR')
+                } else {
+                    this.render()
+                }
+            }
+
+            switch (keyEvent.key) {
+                case 'ArrowRight':
+                    this.onChangeMonth('RIGHT')
+                    this.announceChange('เดือนถัดไป')
+                    break
+                case 'ArrowLeft':
+                    this.onChangeMonth('LEFT')
+                    this.announceChange('เดือนก่อนหน้า')
+                    break
+                case 'ArrowUp':
+                    this.ui_value = new Date(`${year + 1}-${month}-01`)
+                    fnForArrowUpAndDown()
+                    this.announceChange('ปีถัดไป')
+                    break
+                case 'ArrowDown':
+                    this.ui_value = new Date(`${year - 1}-${month}-01`)
+                    fnForArrowUpAndDown()
+                    this.announceChange('ปีก่อนหน้า')
+                    break
+                case 'Enter':
+                    this.calendarType = 'CALENDAR'
+                    this.announceChange('กลับสู่มุมมองปฏิทิน')
+                    this.render()
+                    break
+                case 'Escape':
+                    this.calendarType = 'CALENDAR'
+                    this.ui_value = this.getDateValue()
+                    this.announceChange('กลับไปหน้าวันที่เลือก')
+                    this.render()
+                    break
+            }
+        }) as EventListener)
+    }
+
+    // เพิ่มฟังก์ชันสำหรับประกาศการเปลี่ยนแปลงให้ screen reader
+    private announceChange(message: string) {
+        const announcer = document.querySelector('[role="status"]')
+        if (announcer) {
+            announcer.textContent = message
+        }
+    }
+
+    /**
+     * สร้าง elements สำหรับ header ของปฏิทิน หรือ เมนู
+     * @param container [data-box="container"] || [data-box="menu-container"]
+     */
+    private makeHeader = (container: Element, type: 'calendar' | 'menu') => {
+        const header = document.createElement('div')
+        const attr = type === 'calendar' ? 'body-header' : 'menu-header'
+        header.setAttribute('data-box', attr)
+
+        const { month, year } = this.getConfigValue()
+
+        const arrowLeft = this.createArrowButton('left')
+        header.appendChild(arrowLeft)
+
+        if (type === 'calendar') {
+            const textMonth = document.createElement('div')
+            textMonth.setAttribute('data-box', 'month')
+            textMonth.innerHTML = `${month}`
+            header.appendChild(textMonth)
+        }
+        const textYear = document.createElement('div')
+        const yearAttr = type === 'calendar' ? 'year' : 'menu-year'
+        textYear.setAttribute('data-box', yearAttr)
+        textYear.innerHTML = `${year}`
+        header.appendChild(textYear)
+        const arrowRight = this.createArrowButton('right')
+        header.appendChild(arrowRight)
+
+        container.appendChild(header)
+    }
+
+    /**
+     * สร้าง elements สำหรับแสดงวันในสัปดาห์
+     */
+    private makeWeek = (container: Element) => {
+        const week = document.createElement('div')
+        week.setAttribute('data-box', 'body-week')
+        const fragment = document.createDocumentFragment()
+        onWeeks(this.lang).forEach((v) => {
+            const div = document.createElement('div')
+            div.textContent = v
+            div.setAttribute('data-box', 'week')
+            fragment.appendChild(div)
+        })
+        week.appendChild(fragment)
+        container.appendChild(week)
+    }
+
+    /**
+     * สร้าง elements สำหรับแสดงวันที่
+     */
+    private makeDay = (container: Element) => {
+        const dayBody = document.createElement('div')
+        dayBody.setAttribute('data-box', 'body-day')
+        // อัพเดทส่วนแสดงวันที่
+        const days = this.createDays()
+
+        // สร้าง fragment เพื่อเก็บ elements วันที่ใหม่ทั้งหมด
+        const fragment = document.createDocumentFragment()
+        days.children.forEach((day) => {
+            // สร้าง element วันที่แต่ละวัน
+            const dayElement = document.createElement('div')
+
+            // กำหนด properties และ event handlers
+            if (day.props) {
+                Object.entries(day.props).forEach(([key, value]) => {
+                    dayElement.setAttribute(key, value)
+                })
+            }
+
+            // กำหนดข้อความวันที่
+            if (typeof day.children === 'string') {
+                dayElement.textContent = day.children
+            }
+
+            // เพิ่ม event handlers
+            if (day.methods?.click) {
+                dayElement.addEventListener('click', day.methods.click)
+            }
+
+            fragment.appendChild(dayElement)
+        })
+
+        // เพิ่ม elements วันที่ใหม่ทั้งหมดเข้าไปใน container
+        dayBody.appendChild(fragment)
+        container.appendChild(dayBody)
+    }
+
+    /**
+     * สร้าง box elements สำหรับเมนูเลือกเดือนและปี
+     * @param container [data-box="container"]
+     */
+    private makeMenuContainer = (container: Element) => {
+        const menu = document.createElement('div')
+        menu.setAttribute('data-box', 'menu-container')
+
+        this.makeHeader(menu, 'menu')
+
+        // Create month selector
+        this.createMonthButton(menu)
+
+        // Create year selector
+        this.createYearButton(menu)
+
+        container.appendChild(menu)
+    }
+
+    /**
+     * สร้าง menu elements content สำหรับเลือกปี
+     */
+    private createYearButton(menu: Element) {
+        const menuYear = document.createElement('div')
+        menuYear.setAttribute('data-box', 'menu-year-container')
+        const { year } = this.getConfigValue()
+
+        for (let i = 0; i <= this.countYear; i++) {
+            const yearBtn = document.createElement('button')
+            const val = year + i
+            yearBtn.textContent = String(val)
+            yearBtn.setAttribute('attr-menu-content', String(i === 0))
+            yearBtn.setAttribute(
+                'data-year',
+                String(this.year === 'en' ? val : val - 543)
+            )
+
+            menuYear.appendChild(yearBtn)
+        }
+
+        menu.appendChild(menuYear)
+    }
+
+    /**
+     * สร้าง menu elements content สำหรับเลือกเดือน
+     */
+    private createMonthButton(menu: Element) {
+        const menuMonth = document.createElement('div')
+        menuMonth.setAttribute('data-box', 'menu-month-container')
+
+        // Add months
+        const months = this.getYear(this.ui_value)
+        months.forEach((month) => {
+            const monthBtn = document.createElement('button')
+            monthBtn.textContent = month[this.lang]
+            monthBtn.setAttribute('data-month', String(+month.month_value))
+            monthBtn.setAttribute(
+                'attr-menu-content',
+                String(+month.month_value - 1 === this.ui_value.getMonth())
+            )
+
+            menuMonth.appendChild(monthBtn)
+        })
+
+        menu.appendChild(menuMonth)
+    }
+
+    /**
+     * สร้าง elements สำหรับปุ่มเปลี่ยนเดือนหรือปี
+     * @param direction ทิศทางของปุ่ม
+     */
+    private createArrowButton(direction: 'left' | 'right') {
+        const button = document.createElement('button')
+        button.setAttribute('data-box', 'arrow')
+
+        button.setAttribute('data-box', 'arrow')
+        const span = document.createElement('span')
+        span.classList.add('calendar--arrow', direction.toLocaleLowerCase())
+        button.appendChild(span)
+
+        return button
+    }
+    //---------------------x   เกิดขึ้นครั้งเดียว Create Element   x-------------------------//
+    //----------------------   setUpEvent   --------------------------//
+    public destroyEvent() {
+        // ลบ event listeners ทั้งหมด
+        this.eventListeners.forEach(({ element, type, handler }) => {
+            element.removeEventListener(type, handler)
+        })
+        this.eventListeners = []
+    }
+
+    protected addEventListenerWithCleanup(
+        element: Element,
+        type: string,
+        handler: EventListener
+    ) {
+        element.addEventListener(type, handler)
+        this.eventListeners.push({ element, type, handler })
+    }
+
+    /**
      * ตั้งค่า ARIA attributes สำหรับการเข้าถึง
      */
     protected setupAccessibility(): void {
-        const root = this.rootEl()
+        const { root } = this.validateRootEl()
         if (!root) return
         root.setAttribute('role', 'application')
         root.setAttribute('aria-label', 'ปฏิทิน')
+        // Screen reader announcements
+        this.setupScreenReaderAnnouncements()
     }
 
-    // Add mount method
-    protected mount() {
-        if (this.mounted) return
-        this.mounted = true
-        if (this.isClient()) {
-            this.render()
-        }
+    /**
+     * สร้าง element สำหรับการอ่านข้อความผ่าน screen reader
+     */
+    private setupScreenReaderAnnouncements() {
+        const { root } = this.validateRootEl()
+        if (!root) return
+        const announcer = document.createElement('div')
+        announcer.setAttribute('role', 'status')
+        announcer.setAttribute('aria-live', 'polite')
+        announcer.classList.add('sr-only') // CSS: .sr-only { visibility: hidden }
+
+        root?.appendChild(announcer)
     }
+
+    // เพิ่มเมธอดสำหรับตั้งค่า event handlers แบบ delegation
+    private setupEventListeners() {
+        const { root, rootContainer } = this.validateRootEl()
+        if (!root || !rootContainer) return
+
+        this.addEventListenerWithCleanup(root, 'click', (e) => {
+            const target = e.target as HTMLElement
+
+            // จัดการคลิกที่วันที่
+            const dateTypeCalendar = target
+                .closest('[role="gridcell"]')
+                ?.getAttribute('aria-label')
+            if (dateTypeCalendar) {
+                const dateVal = new Date(dateTypeCalendar)
+                this.onDatePicker(dateVal)
+            }
+
+            // จัดการคลิกที่ปุ่มเปลี่ยนปีในขณะ this.calendarType คือ 'CALENDAR'
+            const yearButton = target.closest('[data-box="year"]')
+            if (yearButton) {
+                this.onClickMonthOrYear(rootContainer, 'YEAR')
+            }
+
+            // จัดการคลิกที่ปุ่มเปลี่ยนเดือนในขณะ this.calendarType คือ 'CALENDAR'
+            const monthButton = target.closest('[data-box="month"]')
+            if (monthButton) {
+                this.onClickMonthOrYear(rootContainer, 'MONTH')
+            }
+
+            // จัดการคลิกที่ปุ่มเปลี่ยนเดือน
+            const arrowButton = target.closest('[data-box="arrow"]')
+            if (arrowButton) {
+                const direction = arrowButton.querySelector('.left')
+                    ? 'LEFT'
+                    : 'RIGHT'
+                this.onChangeMonth(direction)
+            }
+
+            // จัดการคลิกที่ปุ่มเปลี่ยนปีของ menu
+            const menuYear = target.closest('[data-box="menu-year"]')
+            if (menuYear) {
+                this.calendarType = 'CALENDAR'
+                this.render()
+            }
+
+            // จัดการคลิกที่ปุ่มเปลี่ยนเดือนของ menu
+            const menuDataMonth = target
+                .closest('[data-month]')
+                ?.getAttribute('data-month')
+            if (menuDataMonth) {
+                this.ui_value = new Date(
+                    `${this.ui_value.getFullYear()}-${menuDataMonth}-01`
+                )
+                this.calendarType = 'CALENDAR'
+                this.render()
+            }
+
+            // จัดการคลิกที่ปุ่มเปลี่ยนปีของ menu
+            const menuDataYear = target
+                .closest('[data-year]')
+                ?.getAttribute('data-year')
+            if (menuDataYear) {
+                this.ui_value = new Date(
+                    `${menuDataYear}-${this.ui_value.getMonth() + 1}-01`
+                )
+                this.calendarType = 'CALENDAR'
+                this.render()
+            }
+        })
+    }
+    //---------------------x   setUpEvent   x-------------------------//
 }
 
 export default main

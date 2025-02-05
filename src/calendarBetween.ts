@@ -1,12 +1,12 @@
 import { DateValidationError } from './composition-calendar'
 import Main from './main'
-import { StateElement, Style } from './type-calendar'
+import type { Lang, StateElement, Style } from './type-calendar'
 type Box = StateElement & {
     children: StateElement[]
 }
 
 export type CalendarBetweenState = {
-    lang?: 'thai' | 'en' | 'th' | 'english'
+    lang?: Lang
     nextDate?: (arg: any) => void // function
     nextMonth?: (arg: any) => void // function
     year?: 'en' | 'th'
@@ -33,10 +33,8 @@ export class swCalendarBetween extends Main {
         this.validateConfig(config)
         this.initializeState(config)
         if (this.isClient()) {
-            setTimeout(() => {
-                this.setupAccessibility()
-                this.mount()
-            }, 0)
+            this.setupAccessibility()
+            this.mount()
         }
     }
 
@@ -91,7 +89,7 @@ export class swCalendarBetween extends Main {
             id: this.id,
             value: this.values,
             ui_value: this.ui_value,
-            el: this.rootEl(),
+            el: this.validateRootEl().root,
         }
     }
 
@@ -147,8 +145,9 @@ export class swCalendarBetween extends Main {
             beforeLists.push(
                 this.createDate(
                     _date,
-                    'd_before' + ` ${clsBetween(_date)}`,
-                    this.onCheckDisabled(_date, this.min, this.max)
+                    'before',
+                    this.onCheckDisabled(_date, this.min, this.max),
+                    clsBetween(_date)
                 )
             )
         })
@@ -157,14 +156,15 @@ export class swCalendarBetween extends Main {
         for (let i = 0; i < this.getMonth(date).days; i++) {
             const _date = new Date(date.getFullYear(), date.getMonth(), i + 1)
             const current = this.checkSameDate(new Date(), _date)
-                ? ' current_date'
-                : ''
+                ? 'current'
+                : 'date'
 
             dayLists.push(
                 this.createDate(
                     _date,
-                    current + ` ${clsBetween(_date)}`,
-                    this.onCheckDisabled(_date, this.min, this.max)
+                    current,
+                    this.onCheckDisabled(_date, this.min, this.max),
+                    clsBetween(_date)
                 )
             )
         }
@@ -183,8 +183,9 @@ export class swCalendarBetween extends Main {
             afterLists.push(
                 this.createDate(
                     _date,
-                    'd_after' + ` ${clsBetween(_date)}`,
-                    this.onCheckDisabled(_date, this.min, this.max)
+                    'after',
+                    this.onCheckDisabled(_date, this.min, this.max),
+                    clsBetween(_date)
                 )
             )
         }
@@ -232,6 +233,10 @@ export class swCalendarBetween extends Main {
 
     validateCheckPicker(date: Date): boolean {
         return this.checkSameDate(date, this.betweens[0]!)
+    }
+
+    getDateValue() {
+        return this.values[0]
     }
 
     onDatePicker(date: Date): void {

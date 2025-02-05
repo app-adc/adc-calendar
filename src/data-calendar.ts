@@ -1,3 +1,4 @@
+import type { Lang } from './type-calendar'
 export const lists = [
     {
         english: 'January',
@@ -116,7 +117,7 @@ export const css = `
     box-sizing: border-box;
 }
 
-[calendar="root"] {
+[calendar='root'] {
     --font-family: 'Arial', sans-serif;
     --background: #f3f8fe;
     --picker: #0ea5e9;
@@ -128,19 +129,20 @@ export const css = `
     --text-week: #1e293b;
     --borderRadius: .75rem;
     --border: none;
-    --width: 300px;
+    --width: 290px;
 
 
     --shadow: none;
     --text-current: #ffffff; /* text current */
     --week-line: #cbd5e1; 
 
-    min-width: 250px;
+    min-width: var(--width);
     max-width: var(--width);
 
+    --h_header: 40px;
+
 }
-[calendar="container"] {
-   
+[data-box='container'] {
     font-family: var(--font-family);
     box-shadow: var(--shadow);
     border-radius: var(--borderRadius);
@@ -148,8 +150,30 @@ export const css = `
     width: inherit;
     height: max-content;
     background-color: var(--background);
+    overflow: hidden;
+    position: relative;
 }
-[calendar="header"] {
+
+:is([data-type='YEAR'],[data-type='MONTH']) :is([data-box='menu-container'],[data-box='menu-header']){
+    display: flex;
+}
+[data-type='MONTH'] [data-box='menu-month-container']{
+    display: grid;
+}
+[data-type='YEAR'] [data-box='menu-year-container']{
+    display: grid;
+}
+
+
+
+[data-box='container'][data-type='CALENDAR'] :is([data-box='body-week'],[data-box='body-day']){
+    display: grid;
+}
+[data-box='container'][data-type='CALENDAR'] :is([data-box='body-header']){
+    display: flex;
+}
+
+[data-box='body-header'],[data-box='menu-header'] {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -157,29 +181,44 @@ export const css = `
     font-weight: 700;
     color: var(--text);
     padding: 0;
+    overflow: hidden;
+    display: none;
 }
-[calendar="header"] .title {
+ 
+     
+:is([data-box='month'],[data-box='year'],[data-box='menu-year']):hover {
+    color: var(--picker);
+
+}      
+.calendar--arrow:hover {
+    border-color: var(--picker);
+}      
+   
+:is([data-box='month'],[data-box='year'],[data-box='menu-year']){
     padding: 0px;
     cursor: pointer;
-    border-radius: 0.625rem;
     position: relative;
     font-style: normal;
     font-weight: 700;
     font-size: 18px;
+    width: 100%;
+    height: var(--h_header);
+    align-items: center;
+    display: flex;
+    justify-content: center;
+
 }
-.calendar__body {
-    padding: 0px;
-}
-[calendar="body-week"] {
+
+[data-box='body-week'] {
     font-weight: 400;
-    display: grid;
     grid-template-columns: repeat(7, 1fr);
     color: var(--text);
     font-size: 1rem;
     border-top: 1px solid var(--week-line);
     border-bottom: 1px solid var(--week-line);
+    display: none;
 }
-[calendar="body-week"] div {
+[data-box='body-week'] div {
     color: var(--text-week);
     height: 36px;
     background: inherit;
@@ -187,12 +226,12 @@ export const css = `
     justify-content: center;
     align-items: center;
 }
-[calendar="body-day"] {
-    display: grid;
+[data-box='body-day'] {
     grid-template-columns: repeat(7, 1fr);
     color: var(--text);
+    display: none;
 }
-[calendar="body-day"] div {
+[data-box='body-day'] div {
     display: grid;
     place-items: center;
     padding: 0px;
@@ -204,7 +243,7 @@ export const css = `
     transform: scale(1.005, 0.95);
 }
 
-div[calendar='disabled'] {
+[tabindex='-1'] {
     cursor: no-drop !important;
     background-color: inherit;
     opacity: 0.3;
@@ -212,12 +251,12 @@ div[calendar='disabled'] {
     pointer-events: none;
     color: var(--text);
 }
-.d_before,
-.d_after {
+
+:is([aria-placeholder='before'],[aria-placeholder='after']) {
     color: var(--disabled);
     cursor: pointer;
-}
-.current_date {
+}    
+[aria-placeholder='current'] {
     background-color: var(--current);
     color: var(--text-current);
     font-size: 20px;
@@ -225,7 +264,7 @@ div[calendar='disabled'] {
     border-radius: var(--dateRadius);
 }
 
-.picker_date[data_type='DAY'] {
+[aria-selected='true'][aria-details='DAY'] {
     background-color: var(--picker);
     border-radius: var(--dateRadius);
     border: 2px solid #ebf0fc;
@@ -251,7 +290,7 @@ div[calendar='disabled'] {
     opacity: 0.75;
 }
 
-.current_date.between {
+[aria-placeholder='current'].between {
     color: var(--text-color);
     
 }
@@ -259,9 +298,9 @@ div[calendar='disabled'] {
 
 
 
-.calendar__icon-arrow {
+:is([data-box='arrow'], [data-box='menu-arrow']) {
     width: 42px;
-    height: 42px;
+    height: var(--h_header);
     background-color: transparent;
     cursor: pointer;
     display: flex;
@@ -269,7 +308,7 @@ div[calendar='disabled'] {
     align-items: center;
     padding: 0px 16px;
 }
-.calendar__icon-arrow:has(.right) {
+:is([data-box='arrow'], [data-box='menu-arrow']):has(.right) {
     justify-content: flex-end;
 }
 .calendar--arrow {
@@ -299,4 +338,71 @@ div[calendar='disabled'] {
     -webkit-transform: rotate(45deg);
 }
 
+
+[data-box='menu-container'] {
+    flex-direction: column;
+    width: var(--width);
+    display: none;
+}
+
+[data-box='menu-month-container'] {
+    display: none;
+    grid-template-columns: repeat(3, 1fr);
+    grid-gap: 8px;
+    padding: 16px;
+}
+
+[data-box='menu-year-container'] {
+    display: none;
+    grid-template-columns: repeat(4, 1fr);
+    grid-gap: 8px;
+    padding: 16px;
+}
+
+[attr-menu-content] {
+    border-radius: 6px;
+    padding: 8px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+[attr-menu-content]:hover {
+    background-color: #F3F4F6;
+}
+[attr-menu-content='true'] {
+    background-color: var(--picker) !important;
+    color: var(--text-picker) !important;
+}
+
 `
+
+export const onWeeks = (lang: Lang): string[] => {
+    if (lang === 'th' || lang === 'thai') {
+        return ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส']
+    } else if (lang === 'en' || lang === 'english') {
+        return ['Sun', 'Mon', 'Tue', 'Wen', 'Thu', 'Fri', 'Sat']
+    } else return ['Sun', 'Mon', 'Tue', 'Wen', 'Thu', 'Fri', 'Sat']
+}
+
+// let EnumStyle: Required<Style> = {
+//     /**
+//      * สีตัวอักษรวันที่กดเลือก
+//      */
+//     ['font-family']: `'Arial', sans-serif`,
+//     /**
+//      * สีตัวอักษรวันที่กดเลือก
+//      */
+//     ['text-picker']: '#fff', // สีตัวอักษรวันที่กดเลือก --text-picker
+//     picker: '#0ea5e9', // สีวันที่กดเลือก --picker
+//     dateRadius: '50%', // รัศมีวันที่กดเลือก --dateRadius
+//     disabled: '#c3c2c8', // สีวันที่ถูก disabled  --disabled
+//     background: '#f3f8fe', //--background
+//     text: '#151426', //สีตัวอักษร
+//     ['text-week']: '#1e293b', //สีตัวอักษร
+//     current: '#ffdfd2', // สีวันที่ปัจจุบัน --calendar_date_current
+//     border: 'none', //--border
+//     borderRadius: '0.75rem', //--borderRadius
+//     shadow: 'none',
+//     width: '300px',
+// }
