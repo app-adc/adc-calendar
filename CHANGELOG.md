@@ -1,5 +1,11 @@
 # adc-calendar
 
+## 1.2.1
+
+### Patch Changes
+
+- 619bd05: update bug render
+
 ## 1.2.0
 
 ### Minor Changes
