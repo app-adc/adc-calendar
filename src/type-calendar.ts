@@ -2,6 +2,8 @@ import { lists } from './data-calendar'
 
 type Fn = (...arg: any) => void
 
+export type Lang = 'th' | 'en' | 'thai' | 'english'
+
 export type Lists = typeof lists
 export type StateElement = {
     tag: string

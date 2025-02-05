@@ -1,9 +1,9 @@
 import { DateValidationError } from './composition-calendar'
 import Main from './main'
-import { Box, StateElement, Style } from './type-calendar'
+import type { Box, Lang, StateElement, Style } from './type-calendar'
 
 export type CalendarState = {
-    lang?: 'thai' | 'en' | 'th' | 'english'
+    lang?: Lang
     nextDate?: (arg: any) => void // function
     nextMonth?: (arg: any) => void // function
     year?: 'en' | 'th'
@@ -29,10 +29,8 @@ export class swCalendar extends Main {
         // Remove direct DOM manipulation from constructor
         if (this.isClient()) {
             // Defer DOM operations to next tick
-            setTimeout(() => {
-                this.setupAccessibility()
-                this.mount()
-            }, 0)
+            this.setupAccessibility()
+            this.mount()
         }
     }
 
@@ -129,6 +127,7 @@ export class swCalendar extends Main {
             },
             children: [],
         }
+
         const date = this.ui_value
         const [first_week, last_week] = this.onBeforeAfterDay(date)
 
@@ -157,7 +156,7 @@ export class swCalendar extends Main {
             beforeLists.push(
                 this.createDate(
                     _date,
-                    'd_before',
+                    'before',
                     this.onCheckDisabled(_date, this.min, this.max)
                 )
             )
@@ -167,8 +166,8 @@ export class swCalendar extends Main {
         for (let i = 0; i < this.getMonth(date).days; i++) {
             const _date = new Date(date.getFullYear(), date.getMonth(), i + 1)
             const current = this.checkSameDate(new Date(), _date)
-                ? 'current_date'
-                : ''
+                ? 'current'
+                : 'date'
             dayLists.push(
                 this.createDate(
                     _date,
@@ -192,7 +191,7 @@ export class swCalendar extends Main {
             afterLists.push(
                 this.createDate(
                     _date,
-                    'd_after',
+                    'after',
                     this.onCheckDisabled(_date, this.min, this.max)
                 )
             )
@@ -206,9 +205,12 @@ export class swCalendar extends Main {
         return this.checkSameDate(date, this.value)
     }
 
+    getDateValue() {
+        return this.value
+    }
+
     onDatePicker(date: Date): void {
         // event เมื่อ กดเลือกวันที่
-
         this.onSetValue(date)
 
         if (typeof this.nextDate == 'function') {
