@@ -1,5 +1,11 @@
 # adc-calendar
 
+## 1.2.2
+
+### Patch Changes
+
+- update ชื่อ class ไม่ให้ชนกับ class global
+
 ## 1.2.1
 
 ### Patch Changes

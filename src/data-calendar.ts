@@ -243,7 +243,7 @@ export const css = `
     transform: scale(1.005, 0.95);
 }
 
-[tabindex='-1'] {
+[data-box='body-day'] [tabindex='-1'] {
     cursor: no-drop !important;
     background-color: inherit;
     opacity: 0.3;
@@ -256,7 +256,7 @@ export const css = `
     color: var(--disabled);
     cursor: pointer;
 }    
-[aria-placeholder='current'] {
+[data-box='body-day'] [aria-placeholder='current'] {
     background-color: var(--current);
     color: var(--text-current);
     font-size: 20px;
@@ -264,14 +264,14 @@ export const css = `
     border-radius: var(--dateRadius);
 }
 
-[aria-selected='true'][aria-details='DAY'] {
+[data-box='body-day'] [aria-selected='true'][aria-details='DAY'] {
     background-color: var(--picker);
     border-radius: var(--dateRadius);
     border: 2px solid #ebf0fc;
     color: var(--text-picker);
 }
 
-.first, .last {
+[data-box='body-day'] :is(.first,.last) {
     background-color: var(--picker);
     border-radius: var(--dateRadius);
     border: 2px solid #ebf0fc;
@@ -318,22 +318,22 @@ export const css = `
     padding: 3px;
 }
 
-.right {
+.calendar--arrow.right {
     transform: rotate(-45deg);
     -webkit-transform: rotate(-45deg);
 }
 
-.left {
+.calendar--arrow.left {
     transform: rotate(135deg);
     -webkit-transform: rotate(135deg);
 }
 
-.up {
+.calendar--arrow.up {
     transform: rotate(-135deg);
     -webkit-transform: rotate(-135deg);
 }
 
-.down {
+.calendar--arrow.down {
     transform: rotate(45deg);
     -webkit-transform: rotate(45deg);
 }
