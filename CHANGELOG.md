@@ -1,5 +1,11 @@
 # adc-calendar
 
+## 1.2.3
+
+### Patch Changes
+
+- update render for focus
+
 ## 1.2.2
 
 ### Patch Changes
