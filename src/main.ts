@@ -71,6 +71,8 @@ abstract class main {
         } else {
             this.createInitialContainer(root)
         }
+
+        this.initInputHidden()
     }
     /**
      * update การ render ส่วนของเมนู
@@ -664,8 +666,23 @@ abstract class main {
         announcer.setAttribute('role', 'status')
         announcer.setAttribute('aria-live', 'polite')
         announcer.classList.add('sr-only') // CSS: .sr-only { visibility: hidden }
+        announcer.style.display = 'none'
 
         root?.appendChild(announcer)
+    }
+
+    /***
+     * ตั้งค่า focus ให้กับ input hidden
+     */
+    private initInputHidden() {
+        const { rootContainer } = this.validateRootEl()
+        if (!rootContainer) return
+        const input = rootContainer.querySelector(
+            '[data-box="hidden-input"]'
+        ) as HTMLInputElement
+        if (input) {
+            input.focus()
+        }
     }
 
     // เพิ่มเมธอดสำหรับตั้งค่า event handlers แบบ delegation
