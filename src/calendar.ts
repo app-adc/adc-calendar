@@ -87,6 +87,14 @@ export class swCalendar extends Main {
     update(config: Partial<CalendarState>) {
         this.validateConfig({ ...this.getState(), ...config } as CalendarState)
 
+        // อัพเดทค่า style ถ้ามีการกำหนดใน config
+        if (config.style && typeof config.style === 'object') {
+            this.style = {
+                ...this.style,
+                ...config.style,
+            }
+        }
+
         // if  ถูกเรียกมาจากข้างนอกจริง เอาไว้เปลี่ยนค่า วันเดือน ปี ทั้ง ui และ state แล้วทำการ render calendar ใหม่
         if (config.value) {
             this.setDateOfMinMax(config)
