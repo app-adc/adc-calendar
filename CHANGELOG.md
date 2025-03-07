@@ -1,5 +1,11 @@
 # adc-calendar
 
+## 1.2.4
+
+### Patch Changes
+
+- update การใช้ style Render
+
 ## 1.2.3
 
 ### Patch Changes

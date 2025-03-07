@@ -61,6 +61,9 @@ abstract class main {
 
         if (!root) return
 
+        // อัพเดท style ทุกครั้งที่ render
+        this.applyStyles()
+
         if (rootContainer) {
             rootContainer.setAttribute('data-type', this.calendarType)
             if (this.calendarType === 'CALENDAR') {
@@ -212,24 +215,47 @@ abstract class main {
     }
 
     /**
-     * update ค่า style และ css ให้กับ root element
+     * ใช้สำหรับการนำค่า style ที่กำหนดไว้ใน this.style ไปใช้กับ root element
+     * จะถูกเรียกทุกครั้งที่มีการ render เพื่อให้มั่นใจว่า style เป็นปัจจุบันเสมอ
      */
-    protected initStyleAndCss() {
+    protected applyStyles(): void {
+        // ดึง root element
         const { root } = this.validateRootEl()
         if (!root) return
-        const style = this.style!
-        const keys = Object.keys(style)
-        keys.forEach((k) => {
-            const val = `${(style! as any)[k]}`
-            if (k in style!) root.style.setProperty(`--${k}`, val, 'important')
-        })
 
-        // สร้าง css ให้กับ root เมื่อไม่มี
-        if (root.getAttribute('calendar') === 'root') return
-        const styleCss = document.createElement('style')
-        styleCss.textContent = css
-        root.appendChild(styleCss)
-        root.setAttribute('calendar', 'root')
+        // นำ custom styles จาก this.style ไปใช้กับ root element
+        if (this.style && typeof this.style === 'object') {
+            for (const key in this.style) {
+                if (Object.prototype.hasOwnProperty.call(this.style, key)) {
+                    const value = `${(this.style as any)[key]}`
+                    // กำหนด CSS custom property ให้กับ root element
+                    root.style.setProperty(`--${key}`, value, 'important')
+                }
+            }
+        }
+    }
+
+    /**
+     * แยกส่วนของการกำหนด style และการเพิ่ม CSS ออกจากกัน
+     * - การกำหนด style จะทำทุกครั้งที่ render
+     * - การเพิ่ม CSS จะทำเพียงครั้งเดียวตอนสร้าง calendar
+     */
+    protected initStyleAndCss(): void {
+        const { root } = this.validateRootEl()
+        if (!root) return
+
+        // นำ style ปัจจุบันไปใช้
+        this.applyStyles()
+
+        // ตรวจสอบว่าเคยเพิ่ม CSS แล้วหรือยัง ถ้ายังให้เพิ่มเพียงครั้งเดียว
+        if (root.getAttribute('calendar') !== 'root') {
+            // สร้าง style element และเพิ่ม CSS
+            const styleCss = document.createElement('style')
+            styleCss.textContent = css
+            root.appendChild(styleCss)
+            // ทำเครื่องหมายว่าได้เพิ่ม CSS แล้ว
+            root.setAttribute('calendar', 'root')
+        }
     }
 
     /**

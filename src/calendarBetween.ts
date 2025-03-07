@@ -66,13 +66,23 @@ export class swCalendarBetween extends Main {
     }
 
     update(
-        config: Partial<Pick<CalendarBetweenState, 'max' | 'min' | 'values'>>
+        config: Partial<
+            Pick<CalendarBetweenState, 'max' | 'min' | 'values' | 'style'>
+        >
     ) {
         this.validateConfig({
             ...this.getState(),
             ...config,
         } as CalendarBetweenState)
         // if  ถูกเรียกมาจากข้างนอกจริง เอาไว้เปลี่ยนค่า วันเดือน ปี ทั้ง ui และ state แล้วทำการ render calendar ใหม่
+
+        // อัพเดทค่า style ถ้ามีการกำหนดใน config
+        if (config.style && typeof config.style === 'object') {
+            this.style = {
+                ...this.style,
+                ...config.style,
+            }
+        }
         if (config.values) {
             this.setDateOfMinMax(config)
 
